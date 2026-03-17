@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zombie API Discovery & Defence</title>
+    <!-- Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Plotly JS -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-background"></div>
+    <div class="app-container">
+        <header class="glass-header">
+            <div class="brand">
+                <div class="logo"></div>
+                <div>
+                    <h1>API Defence Command</h1>
+                    <span class="badge">Enterprise Radar Active</span>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="scanBtn" class="btn-primary" onclick="startScan()">
+                    <span class="btn-text">INITIATE DEEP SCAN</span>
+                    <div class="btn-glow"></div>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Loading Scanner -->
+            <div id="loadingOverlay" class="overlay hidden">
+                <div class="radar">
+                    <div class="sweep"></div>
+                </div>
+                <h2 class="glitch" data-text="Discovering Endpoints...">Discovering Endpoints...</h2>
+                <p>Analyzing gateway logs, code repos, and network traffic</p>
+            </div>
+            
+            <section class="stats-grid hidden" id="statsGrid">
+                <div class="stat-card glass-panel">
+                    <div class="stat-icon calls-icon"></div>
+                    <div>
+                        <h3>Total Discovered APIs</h3>
+                        <div class="stat-value" id="statDiscovered">0</div>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel alert">
+                    <div class="stat-icon zombie-icon"></div>
+                    <div>
+                        <h3>High-Risk Zombies</h3>
+                        <div class="stat-value" id="statZombies">0</div>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel warning">
+                    <div class="stat-icon shadow-icon"></div>
+                    <div>
+                        <h3>Shadow APIs (No Auth)</h3>
+                        <div class="stat-value" id="statShadow">0</div>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel neutral">
+                    <div class="stat-icon precision-icon"></div>
+                    <div>
+                        <h3>ML Precision</h3>
+                        <div class="stat-value" id="statPrecision">94.2%</div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="dashboard-grid hidden" id="dashboardGrid">
+                <div class="viz-container glass-panel">
+                    <div class="panel-header">
+                        <h2>Infrastructure Dependency Graph</h2>
+                        <div class="legend">
+                            <span class="legend-item"><span class="dot red"></span> Zombie</span>
+                            <span class="legend-item"><span class="dot orange"></span> Shadow</span>
+                            <span class="legend-item"><span class="dot green"></span> Healthy</span>
+                        </div>
+                    </div>
+                    <div id="networkGraph" style="width: 100%; height: 500px;"></div>
+                </div>
+                
+                <div class="list-container glass-panel">
+                    <div class="panel-header">
+                        <h2>Critical API Targets</h2>
+                        <span class="subtitle">Action Required</span>
+                    </div>
+                    <div class="api-list" id="zombieList">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="modal hidden">
+        <div class="modal-content glass-panel border-glow">
+            <div class="modal-header">
+                <h2 id="modalApiId">API_000</h2>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="ml-breakdown">
+                    <h3>ML Risk Breakdown (<span id="modalRiskScore" class="risk-score">9.5</span>/10)</h3>
+                    <ul id="modalFactors">
+                        <li><strong>Staleness:</strong> <span id="modalStale"></span> days ago</li>
+                        <li><strong>Usage Ratio:</strong> <span id="modalUsage"></span>% of historical</li>
+                        <li><strong>Auth Strategy:</strong> <span id="modalAuth"></span></li>
+                        <li><strong>Data Exposure:</strong> <span id="modalExposure"></span></li>
+                    </ul>
+                </div>
+                <div class="action-dock">
+                    <p class="impact-warning">⚠️ High Business Impact: Connects directly to Core DB</p>
+                    <div class="action-buttons">
+                        <button class="btn-action warn" onclick="submitRemediation('warn')">WARN (Slack)</button>
+                        <button class="btn-action quarantine" onclick="submitRemediation('quarantine')">QUARANTINE</button>
+                        <button class="btn-action nuke" onclick="submitRemediation('decommission')">DECOMMISSION (Nuke)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
