@@ -5,7 +5,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import WebSocket, WebSocketDisconnect
 from github import Github
 
 import classifier
@@ -28,7 +29,28 @@ latest_scan_results = []
 previous_scan_results = []
 new_apis_detected = 0
 
-def background_scan_job():
+active_connections = []
+
+@app.websocket("/ws/diff")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+async def notify_clients_of_diff(diff_count):
+    if active_connections:
+        message = json.dumps({"status": "success", "new_apis_count": diff_count})
+        for connection in active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                pass
+
+async def background_scan_job():
     global latest_scan_results, previous_scan_results, new_apis_detected
     print("Running background scan to detect infrastructure drift...")
     try:
@@ -44,19 +66,20 @@ def background_scan_job():
             if diff_count > 0:
                 print(f"Detected {diff_count} new APIs!")
                 new_apis_detected += diff_count
+                await notify_clients_of_diff(diff_count)
                 
         latest_scan_results = results
     except Exception as e:
         print(f"Background scan error: {e}")
 
-scheduler = BackgroundScheduler()
+scheduler = AsyncIOScheduler()
 scheduler.add_job(background_scan_job, 'interval', seconds=60)
 
 @app.on_event("startup")
 async def startup_event():
     scheduler.start()
-    # Run an initial scan to populate data
-    background_scan_job()
+    # Run an initial scan to populate data asynchronously
+    asyncio.create_task(background_scan_job())
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -171,13 +194,14 @@ async def remediate(action: str, api_id: str):
     nginx_conf = None
     gh_status = None
         
-    if action == "decommission":
+    if action in ["decommission", "quarantine"]:
         nginx_conf = generate_nginx_config(api_id, target_endpoint_path)
+    if action == "decommission":
         gh_status = create_github_issue(api_id, target_endpoint_path)
         
     messages = {
         "warn": f"Review Alert created for {api_id}: Slack notification dispatched.",
-        "quarantine": f"Quarantine Engaged: Nginx rate-limiting config generated for {api_id}.",
+        "quarantine": f"Quarantine Engaged: Nginx block config generated for {api_id}.",
         "decommission": f"API Nuked: {api_id} blocked. {gh_status}"
     }
         

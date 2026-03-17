@@ -37,6 +37,14 @@ services:
     networks:
       - zap-net
 
+  mock-bank-cards:
+    image: python:3.11-slim
+    command: /bin/sh -c "pip install fastapi uvicorn && echo 'import uvicorn\nfrom fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/api/v1/cards/list\")\ndef list_cards():\n    return {\"status\": \"ok\", \"cards\": [\"****-****-****-1234\"]}\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8004)' > mock.py && python mock.py"
+    ports:
+      - "8004:8004"
+    networks:
+      - zap-net
+
 networks:
   zap-net:
     driver: bridge

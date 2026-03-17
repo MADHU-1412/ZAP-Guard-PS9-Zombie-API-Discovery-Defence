@@ -226,23 +226,23 @@ async function submitRemediation(action) {
         if (result.status === 'success') {
             showToast(result.message);
             
-            if (action === 'decommission') {
+            if (action === 'decommission' || action === 'quarantine') {
                 const configSect = document.getElementById('nginxConfigSection');
                 const configCode = document.getElementById('nginxConfigCode');
                 configCode.innerText = result.nginx_config || "Nginx Configuration Generation Failed";
                 configSect.classList.remove('hidden');
                 
-                // Remove locally and re-render in background
-                currentApis = currentApis.filter(a => a.id !== apiId);
-                renderDashboard();
-            } else if (action === 'quarantine') {
-                const ep = currentApis.find(a => a.id === apiId);
-                if(ep) {
-                    ep.category = 'Healthy'; 
-                    ep.risk_score = 0;
+                if (action === 'decommission') {
+                    // Remove locally and re-render in background
+                    currentApis = currentApis.filter(a => a.id !== apiId);
+                } else {
+                    const ep = currentApis.find(a => a.id === apiId);
+                    if(ep) {
+                        ep.category = 'Healthy'; 
+                        ep.risk_score = 0;
+                    }
                 }
                 renderDashboard();
-                closeModal();
             } else {
                 closeModal();
             }
@@ -262,18 +262,27 @@ function showToast(msg, isError=false) {
     }, 5000);
 }
 
-// Background poller for Infrastructure Drift
-setInterval(async () => {
-    if(currentApis.length === 0) return; // Don't alert if we haven't scanned yet
-    try {
-        const res = await fetch('/api/diff');
-        const data = await res.json();
-        if(data.status === 'success' && data.new_apis_count > 0) {
-            const banner = document.getElementById('newApiBanner');
-            const countSpan = document.getElementById('newApiCount');
-            const currentCount = parseInt(countSpan.innerText) || 0;
-            countSpan.innerText = currentCount + data.new_apis_count;
-            banner.classList.remove('hidden');
-        }
-    } catch(e) { }
-}, 10000);
+// Background WebSocket for Infrastructure Drift
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/diff`;
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if(data.status === 'success' && data.new_apis_count > 0 && currentApis.length > 0) {
+                const banner = document.getElementById('newApiBanner');
+                const countSpan = document.getElementById('newApiCount');
+                const currentCount = parseInt(countSpan.innerText) || 0;
+                countSpan.innerText = currentCount + data.new_apis_count;
+                banner.classList.remove('hidden');
+            }
+        } catch(e) { }
+    };
+    
+    ws.onclose = () => {
+        setTimeout(connectWebSocket, 5000); // Reconnect if dropped
+    };
+}
+connectWebSocket();

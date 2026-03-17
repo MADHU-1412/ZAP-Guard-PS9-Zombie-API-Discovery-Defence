@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from github import Github
 
 # Setup default targets for the demo environment
-DEFAULT_TARGETS = "mock-bank-core mock-bank-shadow mock-bank-legacy"
+DEFAULT_TARGETS = "mock-bank-core mock-bank-shadow mock-bank-legacy mock-bank-cards"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 def get_random_date(start_days_ago, end_days_ago):
@@ -23,7 +23,7 @@ def scan_network(targets):
     try:
         nm = nmap.PortScanner()
         # Fast scan, non-ping, ports 80, 8000-8080
-        nm.scan(hosts=targets, arguments='-Pn -p 80,443,8000,8001,8002,8003,8080 -T4')
+        nm.scan(hosts=targets, arguments='-Pn -p 80,443,8000,8001,8002,8003,8004,8080 -T4')
     except Exception as e:
         print(f"Nmap scan failed: {e}. Ensure nmap is installed.")
         return []
@@ -73,6 +73,8 @@ def probe_openapis(services):
                 endpoints.append({"id": f"API_{len(endpoints)+1:03d}", "endpoint": "/shadow/payroll", "method": "GET", "base_url": service_url, "documented": False})
             elif "mock-bank-legacy" in service_url:
                 endpoints.append({"id": f"API_{len(endpoints)+1:03d}", "endpoint": "/api/v1/legacy", "method": "GET", "base_url": service_url, "documented": False})
+            elif "mock-bank-cards" in service_url:
+                endpoints.append({"id": f"API_{len(endpoints)+1:03d}", "endpoint": "/api/v1/cards/list", "method": "GET", "base_url": service_url, "documented": False})
 
     return endpoints
 
@@ -144,7 +146,7 @@ def discover_and_augment():
     # If network scan failed or found nothing (like running outside docker), inject mock URLs
     if not services:
         print("No services found via Nmap. Injecting mock services for local demo.")
-        services = ["http://mock-bank-core:8001", "http://mock-bank-shadow:8002", "http://mock-bank-legacy:8003"]
+        services = ["http://mock-bank-core:8001", "http://mock-bank-shadow:8002", "http://mock-bank-legacy:8003", "http://mock-bank-cards:8004"]
         
     api_list = probe_openapis(services)
     
