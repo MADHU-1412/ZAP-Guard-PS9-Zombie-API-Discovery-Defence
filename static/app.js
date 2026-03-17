@@ -1,5 +1,6 @@
 let currentApis = [];
 let networkData = null;
+let initialZombieCount = null;
 
 async function startScan() {
     // UI states Update
@@ -38,18 +39,27 @@ function renderDashboard() {
     document.getElementById('dashboardGrid').classList.remove('hidden');
     
     const zombies = currentApis.filter(a => a.category === 'Zombie');
-    const shadows = currentApis.filter(a => a.category === 'Shadow');
+    const orphaned = currentApis.filter(a => a.category === 'Orphaned');
     
+    if (initialZombieCount === null) {
+        initialZombieCount = zombies.length;
+    }
+    
+    const preExposure = initialZombieCount * 4.45;
+    const currentZombies = zombies.length;
+    const postExposureSecured = (initialZombieCount - currentZombies) * 4.45;
+
     // Animate numbers
     document.getElementById('statDiscovered').innerText = currentApis.length;
     document.getElementById('statZombies').innerText = zombies.length;
-    document.getElementById('statShadow').innerText = shadows.length;
+    document.getElementById('statPreExposure').innerText = `$${preExposure.toFixed(1)}M`;
+    document.getElementById('statPostExposure').innerText = `$${postExposureSecured.toFixed(1)}M`;
     
     renderGraph();
     
-    // Show highest risk items in list (Zombies + Top Shadows)
-    const riskyApis = currentApis.filter(a => a.risk_score >= 5.0).sort((a,b) => b.risk_score - a.risk_score);
-    renderList(riskyApis.slice(0, 50)); // Render top 50 strictly
+    // Show highest risk items in list (Zombies + Top Orphaned)
+    const riskyApis = currentApis.filter(a => a.ghost_score >= 5.0).sort((a,b) => b.ghost_score - a.ghost_score);
+    renderList(riskyApis.slice(0, 50)); 
 }
 
 function renderList(apis) {
@@ -63,13 +73,13 @@ function renderList(apis) {
     
     apis.forEach(api => {
         const div = document.createElement('div');
-        const isCritical = api.risk_score >= 8.0;
+        const isCritical = api.ghost_score >= 8.0;
         
         div.className = `list-item ${isCritical ? 'risk-critical' : 'risk-high'}`;
         div.onclick = () => openModal(api.id);
         
         div.innerHTML = `
-            <div class="item-score">${api.risk_score.toFixed(1)}</div>
+            <div class="item-score">${api.ghost_score.toFixed(1)}</div>
             <div class="item-details">
                 <h4>${api.method} ${api.endpoint}</h4>
                 <div class="item-meta">Category: ${api.category} | Team: ${api.owner_team}</div>
@@ -134,7 +144,7 @@ function renderGraph() {
         
         nodesX.push(nx); nodesY.push(ny); 
         nodesColor.push(color); nodesSize.push(size); 
-        nodesText.push(`API: ${api.id}<br>Risk: ${api.risk_score}`);
+        nodesText.push(`API: ${api.id}<br>Ghost Score: ${api.ghost_score}`);
         nodesSymbol.push('circle');
         
         // Connect to a random core service
@@ -196,19 +206,74 @@ function openModal(id) {
     const api = currentApis.find(a => a.id === id);
     if(!api) return;
     
-    document.getElementById('modalApiId').innerText = api.id + " (" + api.category + ")";
-    document.getElementById('modalRiskScore').innerText = api.risk_score.toFixed(1);
+    document.getElementById('modalApiId').innerText = api.id + " ";
+    document.getElementById('modalCategoryBadge').innerText = api.category.toUpperCase();
     
-    document.getElementById('modalStale').innerText = api.staleness_days;
-    document.getElementById('modalUsage').innerText = (api.usage_ratio * 100).toFixed(1);
-    document.getElementById('modalAuth').innerText = api.auth_type;
-    document.getElementById('modalExposure').innerText = api.data_classification;
+    // Category Badge Color
+    const badge = document.getElementById('modalCategoryBadge');
+    if (api.category === 'Zombie') { badge.style.color='red'; badge.style.borderColor='red'; badge.style.background='rgba(255,0,0,0.1)'; }
+    else if (api.category === 'Orphaned') { badge.style.color='orange'; badge.style.borderColor='orange'; badge.style.background='rgba(255,165,0,0.1)'; }
+    else { badge.style.color='#aaa'; badge.style.borderColor='#555'; badge.style.background='rgba(255,255,255,0.05)'; }
+    
+    document.getElementById('modalRiskScore').innerText = api.ghost_score.toFixed(1);
+    
+    // Posture UI
+    document.getElementById('modalAuth').innerHTML = api.auth_type === 'None' ? '✗ None' : `✓ ${api.auth_type}`;
+    document.getElementById('modalAuth').style.color = api.auth_type === 'None' ? '#ff6b81' : '#2ed573';
+    
+    document.getElementById('modalTls').innerHTML = api.https ? '✓ Active' : '✗ Missing';
+    document.getElementById('modalTls').style.color = api.https ? '#2ed573' : '#ff6b81';
+    
+    document.getElementById('modalRate').innerHTML = api.rate_limited ? '✓ Active' : '✗ Missing';
+    document.getElementById('modalRate').style.color = api.rate_limited ? '#2ed573' : '#ff6b81';
+    
+    document.getElementById('modalExposure').innerHTML = api.data_classification.includes('Confidential') ? '! PII Exposed' : `✓ ${api.data_classification}`;
+    document.getElementById('modalExposure').style.color = api.data_classification.includes('Confidential') ? '#ff4757' : '#7bed9f';
+
+    // Telemetry & Ownership
+    document.getElementById('modalGit').innerText = api.git_blame || 'Unknown';
+    document.getElementById('modalPipeline').innerText = api.pipeline_owner || 'Unknown';
+    document.getElementById('modalSlack').innerText = api.slack_handle || 'Unknown';
+    document.getElementById('modalStale').innerText = `${api.staleness_days} Days`;
     
     document.getElementById('modalLlmExplanation').innerText = api.llm_explanation || "No advanced context available.";
+    
+    // Reset animation blocks
     document.getElementById('nginxConfigSection').classList.add('hidden');
     document.getElementById('nginxConfigCode').innerText = '';
+    document.getElementById('killShotAnimation').classList.add('hidden');
+    ['ks-step1', 'ks-step2', 'ks-step3', 'ks-step4'].forEach(id => {
+        const step = document.getElementById(id);
+        step.style.color = '#888';
+        step.children[0].style.borderColor = '#555';
+        step.children[0].style.background = 'transparent';
+        step.children[0].innerHTML = id.replace('ks-step', '');
+    });
     
     document.getElementById('detailsModal').classList.remove('hidden');
+}
+
+function executeKillShot() {
+    const animationBox = document.getElementById('killShotAnimation');
+    animationBox.classList.remove('hidden');
+    
+    const steps = ['ks-step1', 'ks-step2', 'ks-step3', 'ks-step4'];
+    let delay = 0;
+    
+    steps.forEach((stepId, index) => {
+        setTimeout(() => {
+            const el = document.getElementById(stepId);
+            el.style.color = '#2ed573';
+            el.children[0].style.borderColor = '#2ed573';
+            el.children[0].style.background = 'rgba(46, 213, 115, 0.2)';
+            el.children[0].innerHTML = '✓';
+            
+            if (index === steps.length - 1) {
+                // Done animation, submit real decommission
+                setTimeout(() => submitRemediation('decommission'), 500);
+            }
+        }, delay += 800);
+    });
 }
 
 function closeModal() {
@@ -235,14 +300,20 @@ async function submitRemediation(action) {
                 if (action === 'decommission') {
                     // Remove locally and re-render in background
                     currentApis = currentApis.filter(a => a.id !== apiId);
-                } else {
+                    renderDashboard();
+                } else if (action === 'whitelist') {
                     const ep = currentApis.find(a => a.id === apiId);
                     if(ep) {
-                        ep.category = 'Healthy'; 
-                        ep.risk_score = 0;
+                        ep.category = 'Active'; 
+                        ep.ghost_score = 0;
                     }
+                    renderDashboard();
+                    closeModal();
+                } else if (action === 'warn') {
+                    closeModal();
+                } else {
+                    renderDashboard();
                 }
-                renderDashboard();
             } else {
                 closeModal();
             }

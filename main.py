@@ -2,12 +2,14 @@ import json
 import asyncio
 import os
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import WebSocket, WebSocketDisconnect
 from github import Github
+import csv
+import io
 
 import classifier
 import data_engine
@@ -111,6 +113,46 @@ async def get_diff():
     new_apis_detected = 0 # reset after reading
     return {"status": "success", "new_apis_count": count}
 
+@app.get("/api/export")
+async def export_compliance():
+    """Generates a CSV report for PCI-DSS Compliance (Req 6.3.2)"""
+    global latest_scan_results
+    if not latest_scan_results:
+        return JSONResponse(status_code=400, content={"error": "No scan data available yet. Please run a scan."})
+        
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "API ID", "Endpoint", "Method", "Category", "Ghost Score", "PCI-DSS Compliance", 
+        "Data Sensitivity", "Auth Type", "HTTPS", "Rate Limited", 
+        "Owner Team", "Git Blame", "Pipeline"
+    ])
+    
+    for api in latest_scan_results:
+        pci_status = "Non-Compliant" if api['category'] in ['Zombie', 'Orphaned'] else "Compliant"
+        writer.writerow([
+            api.get('id', ''),
+            api.get('endpoint', ''),
+            api.get('method', ''),
+            api.get('category', ''),
+            api.get('ghost_score', ''),
+            pci_status,
+            api.get('data_classification', ''),
+            api.get('auth_type', ''),
+            api.get('https', ''),
+            api.get('rate_limited', ''),
+            api.get('owner_team', ''),
+            api.get('git_blame', ''),
+            api.get('pipeline_owner', '')
+        ])
+        
+    response = Response(content=output.getvalue())
+    response.headers["Content-Disposition"] = "attachment; filename=PCI-DSS-API-Inventory-Report.csv"
+    response.headers["Content-Type"] = "text/csv"
+    return response
+
 def generate_nginx_config(api_id, endpoint):
     config = f"""
 # NGINX Route Block Configuration for {api_id}
@@ -157,7 +199,7 @@ def create_github_issue(api_id, endpoint):
 
 @app.post("/remediate/{action}/{api_id}")
 async def remediate(action: str, api_id: str):
-    valid_actions = ["warn", "quarantine", "decommission"]
+    valid_actions = ["warn", "quarantine", "decommission", "whitelist"]
     if action not in valid_actions:
         raise HTTPException(status_code=400, detail="Invalid action")
         
@@ -182,6 +224,8 @@ async def remediate(action: str, api_id: str):
                 ep['call_count_30d'] = 0
             elif action == "warn":
                 ep['status'] = "warned"
+            elif action == "whitelist":
+                ep['status'] = "whitelisted"
         if action != "decommission" or ep['id'] != api_id:
             new_endpoints.append(ep)
         
@@ -202,7 +246,8 @@ async def remediate(action: str, api_id: str):
     messages = {
         "warn": f"Review Alert created for {api_id}: Slack notification dispatched.",
         "quarantine": f"Quarantine Engaged: Nginx block config generated for {api_id}.",
-        "decommission": f"API Nuked: {api_id} blocked. {gh_status}"
+        "decommission": f"API Nuked: {api_id} blocked. {gh_status}",
+        "whitelist": f"API {api_id} has been whitelisted and marked safe."
     }
         
     return {

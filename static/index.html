@@ -13,6 +13,11 @@
 <body>
     <div class="app-background"></div>
     <div class="app-container">
+        <!-- Shock Value Banner -->
+        <div id="equifaxBanner" style="background-color: #d93025; color: white; padding: 10px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 100; position: relative;">
+            🚨 EQUIFAX 2017: A forgotten Apache Struts endpoint caused $1.4B in damages. It was a Zombie API. Your bank is already non-compliant with PCI-DSS 4.0 Req 6.3.2 if you cannot enumerate all APIs.
+        </div>
+        
         <header class="glass-header">
             <div class="brand">
                 <div class="logo"></div>
@@ -21,7 +26,11 @@
                     <span class="badge">Enterprise Radar Active</span>
                 </div>
             </div>
-            <div class="actions">
+            <div class="actions" style="display: flex; gap: 10px;">
+                <button class="btn-primary" style="background: rgba(30, 200, 100, 0.2); border-color: #2ecc71;" onclick="window.location.href='/api/export'">
+                    <span class="btn-text">📥 COMPLIANCE REPORT</span>
+                    <div class="btn-glow" style="background: #2ecc71;"></div>
+                </button>
                 <button id="scanBtn" class="btn-primary" onclick="startScan()">
                     <span class="btn-text">INITIATE DEEP SCAN</span>
                     <div class="btn-glow"></div>
@@ -56,22 +65,22 @@
                 <div class="stat-card glass-panel alert">
                     <div class="stat-icon zombie-icon"></div>
                     <div>
-                        <h3>High-Risk Zombies</h3>
+                        <h3>Critical Zombies</h3>
                         <div class="stat-value" id="statZombies">0</div>
                     </div>
                 </div>
                 <div class="stat-card glass-panel warning">
-                    <div class="stat-icon shadow-icon"></div>
+                    <div class="stat-icon calls-icon"></div>
                     <div>
-                        <h3>Shadow APIs (No Auth)</h3>
-                        <div class="stat-value" id="statShadow">0</div>
+                        <h3>Pre-Remediation Exposure</h3>
+                        <div class="stat-value" id="statPreExposure" style="color: #f39c12;">$0.0M</div>
                     </div>
                 </div>
                 <div class="stat-card glass-panel neutral">
                     <div class="stat-icon precision-icon"></div>
                     <div>
-                        <h3>ML Precision</h3>
-                        <div class="stat-value" id="statPrecision">94.2%</div>
+                        <h3>Post-Remediation Exposure</h3>
+                        <div class="stat-value" id="statPostExposure" style="color: #2ecc71;">$0.0M</div>
                     </div>
                 </div>
             </section>
@@ -104,32 +113,72 @@
 
     <!-- Details Modal -->
     <div id="detailsModal" class="modal hidden">
-        <div class="modal-content glass-panel border-glow">
+        <div class="modal-content glass-panel border-glow" style="max-width: 900px;">
             <div class="modal-header">
-                <h2 id="modalApiId">API_000</h2>
-                <button class="close-btn" onclick="closeModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="ml-breakdown">
-                    <h3>ML Risk Breakdown (<span id="modalRiskScore" class="risk-score">9.5</span>/10)</h3>
-                    <div id="modalLlmExplanation" class="llm-explanation">Gathering intelligence...</div>
-                    <ul id="modalFactors">
-                        <li><strong>Staleness:</strong> <span id="modalStale"></span> days ago</li>
-                        <li><strong>Usage Ratio:</strong> <span id="modalUsage"></span>% of historical</li>
-                        <li><strong>Auth Strategy:</strong> <span id="modalAuth"></span></li>
-                        <li><strong>Data Exposure:</strong> <span id="modalExposure"></span></li>
-                    </ul>
+                <div>
+                    <h2 id="modalApiId" style="display:inline-block; margin-right: 15px;">API_000</h2>
+                    <span id="modalCategoryBadge" style="background: rgba(255,0,0,0.2); border: 1px solid red; padding: 2px 8px; border-radius: 4px; font-size:12px; font-weight:bold; color:red;">ZOMBIE</span>
                 </div>
-                <div id="nginxConfigSection" class="config-section hidden">
-                    <h3>Generated NGINX Block Config:</h3>
+                <div style="text-align: right;">
+                    <div style="font-size: 12px; color: #aaa;">GHOST SCORE</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ff4757;"><span id="modalRiskScore">9.5</span><span style="font-size: 14px; color: #555;">/10</span></div>
+                </div>
+                <button class="close-btn" onclick="closeModal()" style="position:absolute; right:20px; top:20px;">×</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="ml-breakdown" style="padding: 15px; background: rgba(100,50,250,0.1); border-left: 4px solid #7e57c2; border-radius: 4px;">
+                    <h3 style="color:#b39ddb; margin-bottom: 5px; font-size:14px; text-transform:uppercase;">Claude Threat Narrative</h3>
+                    <div id="modalLlmExplanation" class="llm-explanation" style="font-style:italic; font-size:14px;">Gathering intelligence...</div>
+                </div>
+                
+                <div style="display: flex; gap: 20px; margin-top: 20px;">
+                    <div style="flex: 1; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                        <h3 style="font-size:12px; color:#888; text-transform:uppercase; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">Security Posture</h3>
+                        <ul style="list-style:none; padding:0; margin:0; font-size:14px;">
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Authentication:</span> <strong id="modalAuth" style="color:#ff6b81;">✗ None</strong></li>
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>TLS Encryption:</span> <strong id="modalTls" style="color:#2ed573;">✓ Active</strong></li>
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Rate Limits:</span> <strong id="modalRate" style="color:#ff6b81;">✗ Missing</strong></li>
+                            <li style="display:flex; justify-content:space-between;"><span>Data Sensitivity:</span> <strong id="modalExposure" style="color:#ff4757;">! PII Exposed</strong></li>
+                        </ul>
+                    </div>
+                    <div style="flex: 1; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                        <h3 style="font-size:12px; color:#888; text-transform:uppercase; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px;">Ownership Attribution</h3>
+                        <ul style="list-style:none; padding:0; margin:0; font-size:14px;">
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Git Blame:</span> <strong id="modalGit" style="color:#70a1ff;">unknown@bank.local</strong></li>
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Pipeline:</span> <strong id="modalPipeline" style="color:#dfe4ea;">jenkins-legacy</strong></li>
+                            <li style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Slack Room:</span> <strong id="modalSlack" style="color:#eccc68;">#dev-null</strong></li>
+                            <li style="display:flex; justify-content:space-between;"><span>Staleness:</span> <strong id="modalStale" style="color:#dfe4ea;">120 Days</strong></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Kill-Shot Progress Animation -->
+                <div id="killShotAnimation" class="hidden" style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px dashed #444;">
+                    <h3 style="font-size:14px; color:#ff4757; margin-bottom:  १५px; display:flex; align-items:center;">
+                        <span class="pulse-dot" style="margin-right:10px;"></span> System Decommission Workflow Executing...
+                    </h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-family:monospace; font-size:12px; color:#888;">
+                        <div id="ks-step1" style="text-align:center;"><div style="width:24px; height:24px; border-radius:50%; border:2px solid #555; margin:0 auto 5px; line-height:20px;">1</div>Approval</div>
+                        <div style="flex:1; border-top:2px dashed #444; margin:0 10px;"></div>
+                        <div id="ks-step2" style="text-align:center;"><div style="width:24px; height:24px; border-radius:50%; border:2px solid #555; margin:0 auto 5px; line-height:20px;">2</div>Git PR</div>
+                        <div style="flex:1; border-top:2px dashed #444; margin:0 10px;"></div>
+                        <div id="ks-step3" style="text-align:center;"><div style="width:24px; height:24px; border-radius:50%; border:2px solid #555; margin:0 auto 5px; line-height:20px;">3</div>Slack</div>
+                        <div style="flex:1; border-top:2px dashed #444; margin:0 10px;"></div>
+                        <div id="ks-step4" style="text-align:center;"><div style="width:24px; height:24px; border-radius:50%; border:2px solid #555; margin:0 auto 5px; line-height:20px;">4</div>JIRA</div>
+                    </div>
+                </div>
+
+                <div id="nginxConfigSection" class="config-section hidden" style="margin-top: 20px;">
+                    <h3>Generated Remediation Config:</h3>
                     <pre><code id="nginxConfigCode"></code></pre>
                 </div>
-                <div class="action-dock">
-                    <p class="impact-warning">⚠️ High Business Impact: Connects directly to Core DB</p>
-                    <div class="action-buttons">
-                        <button class="btn-action warn" onclick="submitRemediation('warn')">WARN (Slack)</button>
+                
+                <div class="action-dock" style="margin-top: 20px;">
+                    <p class="impact-warning" style="margin-bottom: 10px;">⚠️ Requires manual approval for CRIT (>8.0 Ghost Score) endpoints.</p>
+                    <div class="action-buttons" style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-action warn" onclick="submitRemediation('whitelist')" style="background:rgba(255,255,255,0.1); border-color:#666;">WHITELIST (Snooze)</button>
                         <button class="btn-action quarantine" onclick="submitRemediation('quarantine')">QUARANTINE</button>
-                        <button class="btn-action nuke" onclick="submitRemediation('decommission')">DECOMMISSION (Nuke)</button>
+                        <button class="btn-action nuke" onclick="executeKillShot()" style="flex:1;">DECOMMISSION (Kill-Shot)</button>
                     </div>
                 </div>
             </div>

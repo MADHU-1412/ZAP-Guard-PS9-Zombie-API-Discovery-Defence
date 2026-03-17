@@ -136,9 +136,41 @@ def security_probe(endpoint_obj):
     except Exception:
         endpoint_obj['stack_leak'] = False
 
+    # Rate limiting simulation: fast burst to detect 429
+    # (Simulated in MVP to avoid stalling demo: Zombies drop rate limits, Healthy keep them)
+    if "mock-bank-core" in url or "mock-bank-legacy" in url:
+        endpoint_obj['rate_limited'] = False
+    else:
+        endpoint_obj['rate_limited'] = True
+
     endpoint_obj['auth_type'] = auth_type
     endpoint_obj['https'] = url.startswith('https')
     return endpoint_obj
+
+def semantically_analyze_pii(path):
+    """Detect PII fields based on endpoint path semantics."""
+    path_lower = path.lower()
+    if any(k in path_lower for k in ['account', 'customer', 'payroll', 'user', 'card', 'payment', 'ssn', 'aadhaar']):
+        return "Confidential (PII/Financial)"
+    elif any(k in path_lower for k in ['internal', 'admin', 'metrics', 'health']):
+        return "Internal"
+    return "Public"
+
+def get_owner_attribution(team, path):
+    """Determine git blame, pipeline owner, and Slack handle."""
+    if not team or team == "Unknown":
+        return {
+            "git_blame": "dev_404@bank.local (Left Company 2021)",
+            "pipeline_owner": "legacy-jenkins-3",
+            "slack_handle": "#dev-null"
+        }
+    
+    team_slug = team.lower().replace(" ", "-")
+    return {
+        "git_blame": f"lead_{team_slug}@bank.local",
+        "pipeline_owner": f"github-actions/{team_slug}-ci",
+        "slack_handle": f"#{team_slug}-alerts"
+    }
 
 def discover_and_augment():
     services = scan_network(DEFAULT_TARGETS)
@@ -179,7 +211,14 @@ def discover_and_augment():
             api["last_access"] = get_random_date(10, 0)
             api["owner_team"] = random.choice(teams)
             
-        api["data_classification"] = random.choice(["Public", "Internal", "Confidential"])
+        api["data_classification"] = semantically_analyze_pii(api['endpoint'])
+        
+        # Ownership
+        owners = get_owner_attribution(api["owner_team"], api['endpoint'])
+        api["git_blame"] = owners["git_blame"]
+        api["pipeline_owner"] = owners["pipeline_owner"]
+        api["slack_handle"] = owners["slack_handle"]
+        
         if not api.get('id'):
             api["id"] = f"API_D_{i:03d}"
             
@@ -210,13 +249,17 @@ def generate_endpoints():
                 "call_count_30d": call_count_30d,
                 "calls_historical": call_count_30d + random.randint(10000, 200000),
                 "auth_type": random.choice(["OAuth2", "JWT", "API_Key"]),
-                "data_classification": random.choice(["Public", "Internal", "Confidential"]),
+                "data_classification": semantically_analyze_pii(random.choice(base_paths) + random.choice(actions)),
                 "owner_team": random.choice(teams),
+                "git_blame": f"lead_{(random.choice(teams)).lower().replace(' ', '-')}@bank.local",
+                "pipeline_owner": "github-actions/core-ci",
+                "slack_handle": "#core-alerts",
                 "deploy_date": get_random_date(1000, 400),
                 "base_url": "http://mock-gateway:8080",
                 "documented": True,
                 "https": True,
-                "stack_leak": False
+                "stack_leak": False,
+                "rate_limited": True
             })
 
     return endpoints
