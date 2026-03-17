@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  zap-guard:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    networks:
+      - zap-net
+      
+  mock-bank-core:
+    image: python:3.11-slim
+    command: /bin/sh -c "pip install fastapi uvicorn && echo 'import uvicorn\nfrom fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/api/v1/ledger/status\")\ndef read_status():\n    return {\"status\": \"ok\", \"info\": \"This is an old zombie API\"}\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8001)' > mock.py && python mock.py"
+    ports:
+      - "8001:8001"
+    networks:
+      - zap-net
+      
+  mock-bank-shadow:
+    image: python:3.11-slim
+    command: /bin/sh -c "pip install fastapi uvicorn && echo 'import uvicorn\nfrom fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/shadow/payroll\")\ndef payroll():\n    return {\"secret\": \"payroll data exposed\"}\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8002)' > mock.py && python mock.py"
+    ports:
+      - "8002:8002"
+    networks:
+      - zap-net
+
+  mock-bank-legacy:
+    image: python:3.11-slim
+    command: /bin/sh -c "pip install fastapi uvicorn && echo 'import uvicorn\nfrom fastapi import FastAPI, Response\napp = FastAPI()\n@app.get(\"/api/v1/legacy\")\ndef legacy(response: Response):\n    response.headers[\"Warning\"] = \"299 - Deprecated API\"\n    return {\"data\": \"legacy\"}\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8003)' > mock.py && python mock.py"
+    ports:
+      - "8003:8003"
+    networks:
+      - zap-net
+
+networks:
+  zap-net:
+    driver: bridge

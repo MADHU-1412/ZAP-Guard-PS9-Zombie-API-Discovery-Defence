@@ -10,6 +10,8 @@ async function startScan() {
     document.getElementById('loadingOverlay').classList.remove('hidden');
     document.getElementById('statsGrid').classList.add('hidden');
     document.getElementById('dashboardGrid').classList.add('hidden');
+    document.getElementById('newApiBanner').classList.add('hidden');
+    document.getElementById('newApiCount').innerText = '0';
     
     try {
         const response = await fetch('/scan', { method: 'POST' });
@@ -202,6 +204,10 @@ function openModal(id) {
     document.getElementById('modalAuth').innerText = api.auth_type;
     document.getElementById('modalExposure').innerText = api.data_classification;
     
+    document.getElementById('modalLlmExplanation').innerText = api.llm_explanation || "No advanced context available.";
+    document.getElementById('nginxConfigSection').classList.add('hidden');
+    document.getElementById('nginxConfigCode').innerText = '';
+    
     document.getElementById('detailsModal').classList.remove('hidden');
 }
 
@@ -219,19 +225,26 @@ async function submitRemediation(action) {
         
         if (result.status === 'success') {
             showToast(result.message);
-            closeModal();
             
-            // Remove locally and re-render
             if (action === 'decommission') {
+                const configSect = document.getElementById('nginxConfigSection');
+                const configCode = document.getElementById('nginxConfigCode');
+                configCode.innerText = result.nginx_config || "Nginx Configuration Generation Failed";
+                configSect.classList.remove('hidden');
+                
+                // Remove locally and re-render in background
                 currentApis = currentApis.filter(a => a.id !== apiId);
                 renderDashboard();
             } else if (action === 'quarantine') {
                 const ep = currentApis.find(a => a.id === apiId);
                 if(ep) {
-                    ep.category = 'Healthy'; // update visualization
+                    ep.category = 'Healthy'; 
                     ep.risk_score = 0;
                 }
                 renderDashboard();
+                closeModal();
+            } else {
+                closeModal();
             }
         }
     } catch(e) {
@@ -246,5 +259,21 @@ function showToast(msg, isError=false) {
     t.classList.remove('hidden');
     setTimeout(() => {
         t.classList.add('hidden');
-    }, 4000);
+    }, 5000);
 }
+
+// Background poller for Infrastructure Drift
+setInterval(async () => {
+    if(currentApis.length === 0) return; // Don't alert if we haven't scanned yet
+    try {
+        const res = await fetch('/api/diff');
+        const data = await res.json();
+        if(data.status === 'success' && data.new_apis_count > 0) {
+            const banner = document.getElementById('newApiBanner');
+            const countSpan = document.getElementById('newApiCount');
+            const currentCount = parseInt(countSpan.innerText) || 0;
+            countSpan.innerText = currentCount + data.new_apis_count;
+            banner.classList.remove('hidden');
+        }
+    } catch(e) { }
+}, 10000);

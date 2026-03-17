@@ -29,6 +29,12 @@
             </div>
         </header>
 
+        <div id="newApiBanner" class="alert-banner hidden">
+            <span class="pulse-dot"></span>
+            <strong>Infrastructure Drift Alert:</strong> <span id="newApiCount">0</span> new endpoints detected since last deep scan.
+            <button onclick="startScan()" class="btn-refresh">Refresh Matrix</button>
+        </div>
+
         <main>
             <!-- Loading Scanner -->
             <div id="loadingOverlay" class="overlay hidden">
@@ -106,12 +112,17 @@
             <div class="modal-body">
                 <div class="ml-breakdown">
                     <h3>ML Risk Breakdown (<span id="modalRiskScore" class="risk-score">9.5</span>/10)</h3>
+                    <div id="modalLlmExplanation" class="llm-explanation">Gathering intelligence...</div>
                     <ul id="modalFactors">
                         <li><strong>Staleness:</strong> <span id="modalStale"></span> days ago</li>
                         <li><strong>Usage Ratio:</strong> <span id="modalUsage"></span>% of historical</li>
                         <li><strong>Auth Strategy:</strong> <span id="modalAuth"></span></li>
                         <li><strong>Data Exposure:</strong> <span id="modalExposure"></span></li>
                     </ul>
+                </div>
+                <div id="nginxConfigSection" class="config-section hidden">
+                    <h3>Generated NGINX Block Config:</h3>
+                    <pre><code id="nginxConfigCode"></code></pre>
                 </div>
                 <div class="action-dock">
                     <p class="impact-warning">⚠️ High Business Impact: Connects directly to Core DB</p>
