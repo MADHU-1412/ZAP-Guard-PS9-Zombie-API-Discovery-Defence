@@ -10,6 +10,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from github import Github
 import csv
 import io
+import requests
 
 import classifier
 import data_engine
@@ -90,6 +91,37 @@ async def shutdown_event():
 @app.get("/")
 async def serve_ui():
     return FileResponse("static/index.html")
+
+@app.get("/gateway{path:path}")
+@app.post("/gateway{path:path}")
+async def dummy_gateway(path: str):
+    """Live traffic interception demo route."""
+    try:
+        with open('endpoints.json', 'r') as f:
+            endpoints = json.load(f)
+    except FileNotFoundError:
+        endpoints = []
+    
+    # Check if the requested path matches any in our inventory
+    ep = next((e for e in endpoints if e.get('endpoint') == path), None)
+    
+    # If not found or status is specific, reject traffic to prove blocking works
+    if not ep:
+        return JSONResponse(
+            status_code=403, 
+            content={"error": f"Forbidden: API endpoint {path} blocked by ZAP-Guard Auto-Remediation (Decommissioned or Shadow)."}
+        )
+    if ep.get('status') == 'quarantined':
+        return JSONResponse(
+            status_code=429, 
+            content={"error": f"Too Many Requests: API {ep.get('id')} rate-limited by ZAP-Guard Auto-Remediation (Quarantined)."}
+        )
+        
+    return {
+        "status": "success", 
+        "data": "Sensitive Payload Data", 
+        "message": "Traffic allowed by gateway."
+    }
 
 @app.post("/scan")
 @app.get("/scan")  
@@ -243,6 +275,16 @@ async def remediate(action: str, api_id: str):
     if action == "decommission":
         gh_status = create_github_issue(api_id, target_endpoint_path)
         
+    if action == "warn":
+        slack_webhook = os.getenv("SLACK_WEBHOOK_URL")
+        if slack_webhook:
+            try:
+                msg = f"🚨 *ZOMBIE API DETECTED*: {api_id} ({target_endpoint_path}) requires immediate review. High financial exposure risk.\n*Action*: Please check ZAP-Guard Dashboard."
+                requests.post(slack_webhook, json={"text": msg})
+                print(f"Sent live Slack alert to webhook for {api_id}")
+            except Exception as e:
+                print(f"Slack webhook failed: {e}")
+                
     messages = {
         "warn": f"Review Alert created for {api_id}: Slack notification dispatched.",
         "quarantine": f"Quarantine Engaged: Nginx block config generated for {api_id}.",

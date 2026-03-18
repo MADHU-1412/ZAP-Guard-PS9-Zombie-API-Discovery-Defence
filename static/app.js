@@ -45,9 +45,17 @@ function renderDashboard() {
         initialZombieCount = zombies.length;
     }
     
-    const preExposure = initialZombieCount * 4.45;
-    const currentZombies = zombies.length;
-    const postExposureSecured = (initialZombieCount - currentZombies) * 4.45;
+    // Calculate financial exposure using the AI/ML backend scores instead of static math
+    const totalExposure = zombies.reduce((sum, api) => sum + (api.financial_exposure || 0), 0);
+    const inMillions = totalExposure / 1000000;
+    
+    // As a fun hackathon aesthetic, pre-exposure is what we started with
+    if (!window.initialExposureMillions) {
+        window.initialExposureMillions = inMillions > 0 ? inMillions : (initialZombieCount * 4.45);
+    }
+    
+    const preExposure = window.initialExposureMillions;
+    const postExposureSecured = Math.max(0, preExposure - inMillions);
 
     // Animate numbers
     document.getElementById('statDiscovered').innerText = currentApis.length;
@@ -235,6 +243,13 @@ function openModal(id) {
     document.getElementById('modalPipeline').innerText = api.pipeline_owner || 'Unknown';
     document.getElementById('modalSlack').innerText = api.slack_handle || 'Unknown';
     document.getElementById('modalStale').innerText = `${api.staleness_days} Days`;
+    
+    // Show Financial Impact
+    if (api.financial_exposure) {
+        document.getElementById('modalFinancial').innerText = `$${(api.financial_exposure/1e6).toFixed(2)}M`;
+    } else {
+        document.getElementById('modalFinancial').innerText = '$0.00M';
+    }
     
     document.getElementById('modalLlmExplanation').innerText = api.llm_explanation || "No advanced context available.";
     

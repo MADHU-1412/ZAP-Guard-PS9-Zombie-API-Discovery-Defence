@@ -3,13 +3,13 @@ import json
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from anthropic import Anthropic
+from groq import Groq
 import warnings
 
 warnings.filterwarnings('ignore')
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 def load_data(filepath='endpoints.json'):
     try:
@@ -125,13 +125,18 @@ def rule_based_classification(df):
         
     df['category'] = categories
     df['ghost_score'] = ghost_scores
+    
+    # Financial Impact calculation to wow the C-Suite
+    # Based on data classification and days stale. Max Equifax level is $1.4B. We scale it accordingly.
+    df['financial_exposure'] = (df['exposure_score'] / 10.0) * (df['staleness_days'].clip(lower=1) / 365) * 1400000000
+    
     df = df.drop(columns=['version_info', 'is_superseded'])
     return df
 
 def generate_llm_explanation(row):
-    """Call Anthropic Claude to get natural language context"""
+    """Call Groq API to get natural language context"""
     if not client:
-        return f"Deterministic Rule matched {row['category']}. (LLM explanation disabled: Missing ANTHROPIC_API_KEY)"
+        return f"Deterministic Rule matched {row['category']}. (LLM explanation disabled: Missing GROQ_API_KEY)"
         
     prompt = f"Analyze this API endpoint: {row['endpoint']}. It has a Ghost Score of {row['ghost_score']}/10. It was classified as '{row['category']}'. " \
              f"Stats: {row['staleness_days']} days stale, {row['call_count_30d']} calls last 30 days, " \
@@ -139,16 +144,16 @@ def generate_llm_explanation(row):
              "Give a 2 sentence compelling explanation of why this poses a security risk to the business and PCI-DSS compliance."
              
     try:
-        response = client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=100,
-            system="You are a cybersecurity expert analyzing API risks.",
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
             messages=[
+                {"role": "system", "content": "You are a cybersecurity expert analyzing API risks. Be extremely concise, strictly 2 sentences maximum. Give a compelling explanation of why this poses a security risk to the business and PCI-DSS compliance."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=100
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Rule matched {row['category']}. (LLM analysis failed: {e})"
 
